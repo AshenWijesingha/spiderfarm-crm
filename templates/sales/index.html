@@ -1,0 +1,1142 @@
+{% extends 'sales/base.html' %}
+{% load staticfiles %}
+{% load thumbnail %}
+{% block extralinks %} 
+<style>
+  .text_ellipsis {
+    width: 16em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .form-group label {
+    font-weight: 800;
+  }
+
+  .add_opacity {
+    opacity: 0.2;
+  }
+
+  .opacity_block {
+    opacity: 0.2;
+  }
+
+  .custom-select {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 5'%3E%3Cpath fill='white' d='M2 0L0 2h4zm0 5L0 3h4z'/%3E%3C/svg%3E")
+}
+</style>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/css/select2.min.css" rel="stylesheet" />
+{% endblock %}
+{% block content %}
+{% load common_tags %}
+<!-- <a href="{% url "common:logout" %}"><button class="btn btn-primary" type="button">Logout</button></a> -->
+
+<head>
+  <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.8.13/themes/start/jquery-ui.css" />
+</head>
+
+<div class="col-lg-12 text-right">
+	{% if "MANAGER" in request.user.role or "ADMIN" in request.user.role or request.user.is_superuser %}
+        <button type="button" class="btn btn-primary" id="btn_distribute" data-toggle="modal" data-target="#exampleModalCenter">
+          Distribute Leads
+        </button>
+	{% endif %}
+</div>
+
+
+<br>
+
+<!-- Assign Leads modal -->
+<div class="modal fade" id="exampleModalCenter" tabindex="-1" role="dialog" aria-labelledby="exampleModalCenterTitle" aria-hidden="true">
+  <form id="leads_assign" action="/leads/assign/" method="post">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+
+      <!-- begin leads_assign form -->
+      <div class="modal-header justify-content-md-center">
+          <select class="selectpicker" name="assign_type">
+            <option value="ASSIGN" selected>Assign SSL Leads</option>
+            <option value="UNASSIGN">Unassign SSL Leads</option>
+          </select>
+      </div>
+
+      <div class="modal-body container-fluid" id="modal-body">
+       
+       <div class="form-group">
+        <div id="inner-modal-body">
+
+        <div class="row justify-content-md-center">
+         <div class="col-md-auto">
+           <label for="exampleInputEmail1">Sales Team</label>
+           <select class="assigned_users form-control" name="assigned_to" multiple="multiple">
+	       <option value="ALL">All Sales</option>
+             {% for user in users %}
+               <option value="{{user.email}}" {% if user.email in assignedto_list %} selected="" {% endif %}>
+                 {{user.email}}</option>
+             {% endfor %}
+          </select>
+         </div>
+        </div>
+
+        <br>
+
+        <div class="row justify-content-md-center">
+         <div class="col-md-auto">
+          <div class='input-group date' id='dist_range_start'>
+          <input name="assign_range_start" value={{ request.POST.assign_range_start }} class="form-control" placeholder="Start Date" id="id_assign_range_start" type="text">
+          </div>
+         </div>
+        </div>
+        <br> 
+
+        <div class="row justify-content-md-center">
+         <div class="col-md-auto">
+          <div class='input-group date' id='datepicker1'>
+           <input name="assign_range_end" value={{ request.POST.assign_range_end }} class="form-control" placeholder="End Date" id="id_assign_range_end" type="text">
+          </div>
+         </div>
+        </div>
+
+         <div class="row justify-content-md-center">
+          <div class="col-md-auto">
+            <br>
+            <span class="error justify-content-md-center col-md-auto d-none" id="distribute_error"><i class="fa fa-exclamation-circle"></i> Invalid date ranges</span>
+          </div>
+         </div>
+
+       </div>
+        
+        </div> 
+        <!-- end inner-modal-body -->
+
+        <!-- progress bar section -->
+        <div class="progress d-none" style="height: 25px;">
+          <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="" aria-valuemin="0" aria-valuemax="100">
+          </div>
+        </div>
+        <!-- end progress bar section -->
+
+        <div class="row justify-content-md-center">
+         <div class="col-md-auto">
+           <h5 class="modal-title d-none" id="distribute-modal-text">Assigning leads now ...</h5>
+         </div>
+        </div>
+
+      </div>
+      
+      <div class="form-group buttons_row">
+      <div class="modal-footer text-center">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="close_leads_assign()">Close</button>
+        <button type="submit" id="btn_assign" class="btn btn-primary">Distribute</button>
+
+      </div> <!-- end modal-footer -->
+      </div> <!-- end form-group buttons_row  -->
+
+    </div>
+   </form>
+  </div>
+</div>
+
+<!-- end Assign Leads modal -->
+
+<!-- Upload Leads modal -->
+
+<div class="modal fade" id="uploadleadfile" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+   <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+         <div class="modal-header justify-content-md-center">
+            <h5 class="modal-title" id="exampleModalLabel">Upload Leads CSV</h5>
+	 </div>
+	 <div class="modal-body container-fluid">
+	    <div id="upload-ajax-ui">
+	       <br>
+	       <div class="text-center" id="lbl-upload-spiderjob-progress">
+	          <div class="fa-3x"><i class="fas fa-spider fa-spin"></i></div>
+		     <label for="exampleInputEmail1">Cleaning lead data for upload ...</label>
+		  </div>
+
+		  <br>
+	        <div class="progress" id="track-upload-spiderjob-progress" style="height: 25px;">
+		  <!-- progress bar section -->
+		  <div class="progress-bar progress-bar-striped bg-primary progress-bar-animated" id="track-upload-spiderjob-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="" aria-valuemin="0" aria-valuemax="100">
+		  </div>
+		</div>
+		<!-- end progress bar section -->
+
+		<br>
+		<div class="text-center" id="lbl-upload-progress">
+		  <label for="exampleInputEmail1"></label>
+		</div>
+
+		<br>
+		<div class="progress" id="upload-spiderjob-progress" style="height: 25px;">
+		<!-- progress bar section -->
+		  <div class="progress-bar progress-bar-striped bg-success progress-bar-animated" id="upload-spiderjob-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="" aria-valuemin="0" aria-valuemax="100">
+		  </div>
+                </div>
+	        <!-- end progress bar section -->
+		<br>
+		<!-- end upload-ajax-iu -->
+	    </div>
+
+	<form id="frm_upload_csv" action="" method="POST" enctype="multipart/form-data">
+          <div class="filter_col col-md-12">
+	    <div class="form-group">
+              <label>Leads File <span class="error">*</span>
+	      </label>
+	      <input type="file" class="form-control-file" name="leads_file" accept=".csv" id="leads_file_input">
+	    </div>
+	  </div>
+
+	  <div class="row justify-content-md-center d-none" id="upload_error">
+            <div class="col-md-12">
+	      <span class="error justify-content-md-center" id="span_upload_error"><i class="fa fa-exclamation-circle"></i></span>
+	    </div>
+	  </div>
+
+	  <div class="col-md-12">
+          <div class="row marl buttons_row text-center form_btn_row">
+	  <button type="submit" class="btn btn-default save">Upload</button>
+	  <button type="button" class="btn btn-default clear" data-dismiss="modal" id="close_upload_form">Cancel</button>
+	  </div>
+	  </div>
+	</form>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- end Upload Leads modal -->
+
+<!-- start Export Leads modal -->
+
+<div class="modal fade" id="exportleadscsv" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+   <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content">
+
+	      <div class="modal-body">
+		<div class="text-center">
+                  <a href="{% url 'leads:sample_lead_file' %}">Download Leads CSV</a>
+                </div>      
+	      </div> 
+	      <!-- end modal body -->
+    </div>
+  </div>
+</div>
+
+<!-- end Export Leads modal -->
+
+<div class="row marl justify-content-center">
+  <div class="col-md-12">
+    <!-- count_blocks_row starts here -->
+    <div class="row count_blocks_row">
+
+      <div class="col-md-6">
+        <div class="item sky_blue">
+	<div class="count">LEADS</div>
+	<div class="title">{{ month_name }}</div>
+            <div class="card bg-light">
+            <div class="card-body">
+               <div id="lead_stats" class="lead_stats">
+               <h5 class="card-title text-center">Monthly Total: {{ monthly_total_leads }}</h5>
+	       <hr/>
+	       <h5 class="card-title text-center">Daily Average: {{ daily_avg_leads }}</h5>
+	       </div>
+	    </div> <!-- end card body -->
+            <div class="card-footer text-center">
+		    <div class="form-row">
+                      <div class="col">
+                      <button type="button" class="btn btn-secondary" id="btn_upload_csv" data-toggle="modal" data-target="#uploadleadfile" data-backdrop="static" data-keyboard="false">
+	              <i class="fas fa-file-upload fa-lg"></i> 
+	              Upload
+	              </button>
+		      </div>
+		      <div class="col">
+                      <button type="button" class="btn btn-secondary" id="btn_export_csv" data-toggle="modal" data-target="#exportleadscsv">
+                      <i class="fas fa-cloud-download-alt fa-lg"></i> 
+                      Export
+	              </button>
+		      </div>
+		    </div>
+	    </div> <!-- end card footer -->
+
+	   </div> <!-- end card bg-light --> 		    
+	</div> <!-- end item color box -->
+      </div>
+ 
+      <!-- 
+      <div class="col-md-3">
+        <div class="item red">
+          <a href="#">
+            <div class="count">SALES</div>
+	    <div class="title"></div>
+          </a>
+        </div>
+      </div>
+     -->
+
+      <div class="col-md-6">
+        <div class="item yellow">
+            <div class="count">ZONES</div>
+	    <div class="title">.com</div>
+	    <div class="card bg-light">
+            <div class="card-body">
+	       <div id="zone_import_ui_top" class="d-none">	    
+	         <div class="text-center" id="lbl-jobs-progress">
+                   <label for="exampleInputEmail1"></label>
+		   <br>
+	           <div class="fa-lg"><i id="import-spider-icon" class="fas fa-spider fa-spin fa-2x"></i></div>
+                 </div>
+
+		 <br>
+
+	         <div class="text-center" id="lbl-import-progress">
+                   <label for="exampleInputEmail1"></label>
+                 </div>
+	      </div>
+
+	      <div id="zone_stats" class="zone_stats">
+	       <h5 class="card-title text-center">Pending: {{ pending_com_zones }}</h5>
+	         <hr/>
+	       <h5 class="card-title text-center">Imported: {{ imported_com_zones }}</h5> 
+              </div>
+	    </div>
+	    <div class="card-footer text-center">
+                <div id="zone_import_ui_bottom" class="d-none">
+	          <!-- import spiderjob progress bar -->
+                    <div class="progress" id="import-spiderjob-progress" style="height: 25px;">
+                    <!-- progress bar section -->
+                    <div class="progress-bar progress-bar-striped bg-warning progress-bar-animated" id="import-spiderjob-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+              <!-- end progress bar section -->
+            </div>
+	      <form id="frm_import_domains" class="filler" action="http://35.155.172.235:8000/spiderfarm/import/" method="POST">
+                      <div class="form-row">
+		        <div class="col">
+		          <button type="submit" id="btn_start_import" class="btn text-center btn-secondary float-left">
+		          <span> <i class="fas fa-crosshairs fa-lg"></i> Scan Zone</span>
+		          </button>
+			</div>
+			<div class="col">
+			
+                        <select class="custom-select text-white float-right bg-secondary text-center" id="id_import_tlds" name="import_domains_tld_type">
+		        {% for each_tld in tlds %}
+		        <option value="{{each_tld}}" {% if each_tld == '.com' %}selected{% endif %}>
+		        {{each_tld}} </option>
+		        {% endfor%}
+			</select> 
+			</div>
+		      </div>
+                <input type="hidden" name="import_domains_pending_zones" id="import_domains_pending_zones" value="{{ pending_com_zones }}">
+                <input type="hidden" name="import_domains_zone_count" id="import_range" value="5">
+	      </form>
+	      </div> <!-- end card footer -->
+            </div>
+           </div>
+	 </div>
+            <!-- <div class="more"><a href="#">Go Live</a></div> -->
+        </div>
+      </div>
+    </div>
+    <!-- count_blocks_row ends here -->
+    <div class="open_sections row">
+      <div class="col-md-6 table_container_row">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">
+              <span></span>
+            </div>
+            <div class="table-responsive">
+              {% if accounts %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th width="30%">Name</th>
+                    <th width="30%">Tags</th>
+                    <th width="40%">Assigned To</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for account in accounts|slice:"10" %}
+                  <tr>
+                    <td>
+                      <div class="text_ellipsis">
+                      <a href="{% url 'accounts:view_account' account.id %}">{{account.name}}</a>
+                    </div>
+                    </td>
+                    <td style="display: block;">
+                      {% for tag in account.tags.all|slice:'3' %}
+                      <span class="text-left color{{forloop.counter}} tag_class_acc" id="list_tag"
+                        data-link="{{tag.id}}" style="cursor: pointer;">{{tag.name}}</span>
+                      {% empty %}
+                      <span class="text-left">No Tags</span>
+                      {% endfor %}
+                      {% if account.tags.all|length > 3 %}
+                      <a href="{% url 'accounts:view_account' account.id %}">
+                        <span class="text-left" id="list_tag">{{account.tags.all|length|subtract:'3'}}<span> more
+                          </span></span></a>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% with users=account.assigned_to.all %}
+                      {% for user in users|slice:'3' %}
+                      {% if user.profile_pic %}
+                      {% thumbnail user.profile_pic "40x40" crop="center" as im %}
+                      <span>
+                        <a href="{% url 'common:view_user' user.id %}">
+                          <img src="{{ im.url }}" width="{{ im.width }}" height="{{ im.height }}"
+                            title="{{ user.email }}">
+                        </a>
+                        {% endthumbnail %}
+                        {% else %}
+                        <a href="{% url 'common:view_user' user.id %}">
+                          <img src="{% static 'images/user.png' %}" title="{{ user.email }}" width="40" height="40">
+                        </a>
+                      </span>
+                      {% endif %}
+                      {% empty %}
+                      <span class="text-left">None</span>
+                      {% endfor %}
+                      {% if users|length > 3 %}
+                      <div>
+                        <a href="{% url 'accounts:view_account' account.id %}">
+                          <span class="text-left mt-2" id="list_tag">{{users|length|subtract:'3'}}<span> more
+                            </span></span></a>
+                      </div>
+                      {% endif %}
+                      {% endwith %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="text-align:center"></p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 table_container_row">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-title">
+              <span></span>
+            </div>
+            <div class="table-responsive">
+              {% if opportunities %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th width="30%">Name</th>
+                    <th width="30%">Tags</th>
+                    <th width="40%">Assigned To</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for opportunity in opportunities|slice:"10" %}
+                  <tr>
+                    <td>
+                      <div class="text_ellipsis">
+                      <a href="{% url 'opportunity:opp_view' opportunity.id %}">{{opportunity.name}}</a>
+                    </div></td>
+                    <td style="display: block;">
+                      {% for tag in opportunity.tags.all|slice:'3' %}
+                      <span class="text-left color{{forloop.counter}} tag_class_opp" id="list_tag"
+                        data-link="{{tag.id}}" style="cursor: pointer;">{{tag.name}}</span>
+                      {% empty %}
+                      <span class="text-left">No Tags</span>
+                      {% endfor %}
+                      {% if opportunity.tags.all|length > 3 %}
+                      <a href="{% url 'opportunity:opp_view' opportunity.id %}">
+                        <span class="text-left" id="list_tag">{{opportunity.tags.all|length|subtract:'3'}}<span> more
+                          </span></span></a>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% with users=opportunity.assigned_to.all %}
+                      {% for user in users|slice:'3'  %}
+                      {% if user.profile_pic %}
+                      {% thumbnail user.profile_pic "40x40" crop="center" as im %}
+                      <span>
+                        <a href="{% url 'common:view_user' user.id %}">
+                          <img src="{{ im.url }}" width="{{ im.width }}" height="{{ im.height }}"
+                            title="{{ user.email }}">
+                        </a>
+                        {% endthumbnail %}
+                        {% else %}
+                        <a href="{% url 'common:view_user' user.id %}">
+                          <img src="{% static 'images/user.png' %}" title="{{ user.email }}" width="40" height="40">
+                        </a>
+                      </span>
+                      {% endif %}
+                      {% empty %}
+                      <span class="text-left">None</span>
+                      {% endfor %}
+                      {% if users|length > 3 %}
+                      <a href="{% url 'opportunity:opp_view' opportunity.id %}">
+                        <span class="text-left mt-2" id="list_tag">{{users|length|subtract:'3'}}<span> more
+                          </span></span>
+                      </a>
+                      {% endif %}
+                      {% endwith %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <p style="text-align:center"></p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block js_block %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/js/select2.min.js"></script>
+<script type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.13/jquery-ui.min.js'></script>
+<script src="{% static 'js/ajaxForm.js' %}"></script>
+<script type="text/javascript">
+
+// vars
+var prg_track_upload = $('#track-upload-spiderjob-progress-bar');
+var prg_upload = $('#upload-spiderjob-progress-bar');
+
+function wait(ms){
+  var d = new Date();
+  var d2 = null;
+  do { d2 = new Date(); }
+      while(d2 - d < ms);
+}
+
+
+  $(document).ready(function () {
+    $('#loading_spinner').hide();
+    $('#spinner_body').hide();
+    $('#upload-ajax-ui').hide();
+    $('.assigned_sales').select2();
+
+    var ssl_zone_import_error = "{{ ssl_zone_import_error }}";
+    var ssl_zone_import_id = "{{ ssl_zone_import_id }}";
+    
+    if (ssl_zone_import_error == "") {
+        console.log("NO ssl zone error");
+    } else {
+        console.log("ssl_import_error =" + ssl_zone_import_error);
+	// hide zone stats
+        $('#zone_stats').toggleClass('d-none');
+
+	// hide import form
+	$('#frm_import_domains').toggleClass('d-none');
+
+	// unhide top ui
+        $('#zone_import_ui_top').toggleClass('d-none');
+
+	// put up error message
+	$('#lbl-jobs-progress label').text(ssl_zone_import_error);
+
+	// make spider icon red
+	$('#import-spider-icon').attr('style', 'color:red;');
+	$('#import-spider-icon').toggleClass('fa-spin');
+    }
+
+    if (ssl_zone_import_id == "") {
+        console.log("NO ssl_zone_import_id");
+    } else {
+
+	// unhide bottom progress bar
+        if ($('#zone_import_ui_bottom').hasClass('d-none')){
+            $('#zone_import_ui_bottom').toggleClass('d-none');
+        }
+
+        console.log("ssl_zone_import_id = " + ssl_zone_import_id);
+	// hide import form
+        $('#frm_import_domains').toggleClass('d-none');
+
+	// hide zone stats
+	$('#zone_stats').toggleClass('d-none');
+
+	// unhide top ui
+	$('#zone_import_ui_top').toggleClass('d-none');
+
+	// update import UI
+	get_import_info(ssl_zone_import_id);
+    }
+
+  });
+
+  $('#collapse_date_range').on('shown.bs.collapse', function () {
+      isExportRangeExpanded = true;
+  });
+
+  $('#collapse_date_range').on('hidden.bs.collapse', function () {
+      isExportRangeExpanded = false;
+  });
+
+  $(document).on('change', 'input:radio[id^="tgl_export"]', function (event){
+
+      if (this.value == 'date'){
+         $('#collapse_date_range').collapse('show');
+      }
+
+      if (this.value == 'all'){
+
+	  if (isExportRangeExpanded == true){ 
+	      $('#collapse_date_range').collapse('hide');
+	  }
+
+      }
+  });
+
+  $("#uploadleadfile").on("hidden.bs.modal", function () {
+    // put your default event here
+    $('#loading_spinner').hide();
+    $('#spinner_body').hide();
+    $('p.failure').remove();
+    $('#leads_file_input').val('');
+    //$('#frm_upload_csv').show();
+    //$('#upload-ajax-ui').hide();
+  });
+
+  
+$('#uploadleadfile').ajaxForm({
+    type: 'POST',
+    dataType: 'json',
+    url: "{% url 'leads:upload_lead_csv_file' %}",
+    data: $(this).serialize(),
+    beforeSend: function () {
+      $('#cover_screen').addClass('add_opacity');
+    },
+    success: function (data) {
+      console.log('-- inside #uploadleadfile. success --');         
+      console.log(data);
+      if (data.task_id != null) {
+        console.log('-- data.task_id != null, passing to get_upload_info() --')
+	$('#frm_upload_csv').hide();
+	$('#upload-ajax-ui').show();
+	// call ajax for updating progress bars
+	get_upload_info(data.task_id);
+
+      } else {
+        console.log('-- data.task_id IS NULL, ERROR--');
+	$('p.failure').remove();
+	$('#upload_error').removeClass('d-none');
+
+	for (var key in data.errors) {
+	  $('#span_upload_error').html('<p class="error failure"> *' + data.errors[key] + '</p>');
+          $('#cover_screen').removeClass('add_opacity');
+        }
+      }
+    },
+    error: function (xhr, errmsg, err) {
+      console.log('error data', errmsg, err)
+    }
+  });
+
+
+  function get_upload_info(task_id) {
+    console.log("-- inside get_upload_info");
+
+    $.ajax({
+         type: 'get',
+         url: "{% url 'leads:upload_lead_csv_file' %}",
+         data: {'task_id': task_id},
+         success: function (data) {
+             if (data.state == 'PENDING') {
+                 console.log(" -- success: PENDING ..");
+             }
+             else if (data.state == 'PROGRESS' || data.state == 'SUCCESS') {
+
+		 prg_upload.css('width', data.result.current_domain_progress);
+                 prg_track_upload.css('width', data.result.spiderjob_progress);
+
+		 import_text = data.result.import_status + data.result.current_domain
+
+                 track_text = data.result.domain_count + " of " + data.result.total_domains
+
+                 $('#lbl-upload-spiderjob-progress label').text(import_text);
+		 $('#lbl-upload-progress label').text(track_text);
+
+                 if (data.result.import_status == '-- Lead uploads complete --'){
+	             $('#uploadleadfile').modal('hide');
+		     wait(1500);
+	             location.reload(true);
+		 }
+
+             }
+
+             if (data.state != 'SUCCESS') {
+                 console.log(" -- continuing with async task on Celery ..");
+                 setTimeout(function () {
+                     get_upload_info(task_id);
+                  }, 250);
+             }
+         },
+         error: function (data) {
+             // need to add some kind of feedback for error reporting
+             console.log(" -- error: something happened on SpiderJob Import ..");
+	     console.log(data);
+         }
+     });
+
+  }
+
+
+  var started = false;
+  var import_started = false;
+  var import_frm = $('#frm_import_domains');
+  var frm = $('#leads_assign');
+
+  var prgimport = $('#import-spiderjob-progress');
+  var prgimport_bar = $('#import-spiderjob-progress-bar');
+  var prgtrack = $('#track-spiderjob-progress');
+  var prgtrack_bar = $('#track-spiderjob-progress-bar');
+  var lbl_current_spiderjob = $('#lbl-import-progress');
+  var lbl_track_progress = $('#lbl-jobs-progress');
+
+  var prgline = $('.progress-bar');
+
+  var mod_body = $('#inner-modal-body');
+
+  var mod_header = $('.modal-header');
+  // save initial inner html for reset fn later
+  var init_mod_body = mod_body.html();
+
+  var btn_import = $('#btn_import');
+  var btn_distribute = $('#btn_distribute');
+
+  var frm_export = $('#frm_export_csv');
+  var export_progress_bar = $('#export-progress-bar');
+
+  $(function () {
+      frm_export.submit(function(e) {
+          console.log('-- inside frm_export.submit event --');
+	  // extract data from form, check export_range
+	  var data = frm_export.serializeArray().reduce(function(obj, item) {
+		  obj[item.name] = item.value;
+		  return obj;
+	  }, {});
+          console.log('-- outout from serializeArray fn --');
+	  console.log(data);
+          
+	  if (data['export_range'] == 'date'){
+	      console.log('-- export_rage: date caught --');
+	      console.log(data['export_type'])
+
+	      // validate time ranges
+              if (data['ssl_expire_from'] == "" || data['ssl_expire_to'] == ""){
+		  console('-- invalid time ranges - trying to flip on err msg --');
+	          $('#export_error').toggleClass('d-none');
+		  return false;
+	      } else {
+                  // set up moment vars for comparison
+                  var start_date = moment(data['ssl_expire_to'],'YYYY-MM-DD');
+                  var end_date = moment(data['ssl_expire_from'],'YYYY-MM-DD');
+                  // if start time is NOT before end time
+                  if (!start_date.isBefore(end_date)) {
+	              $('#export_error').toggleClass('d-none');
+		      return false;
+	          }   
+	      } // end date range validation
+	  }
+	      
+	  $.ajax({
+                  type: frm_export.attr('method'),
+                  url:  '/leads/export/',
+                  data: frm.serialize(),
+                  success: function (data) {
+                          if (data.task_id != null) {
+                              // insert progress bar if success
+                              console.log("success in lead export modal form -> submit");
+                              // remove form elements
+                              $("#frm_export_wrapper").toggleClass('d-none');
+			      // make the progress bar visible
+			      $('#export-progress').toggleClass('d-none');
+
+                              // call ajax for updating bar
+                              get_export_info(data.task_id);
+                          }
+                  },
+                  error: function (data) {
+                      // need to add some kind of feedback for error reporting
+                      console.log("error in leads_assign form -> submit");
+                  }
+              });
+           return false;
+        }); 
+    });
+
+	  
+
+  $(function () {
+      
+      frm.submit(function(e) {
+          console.log(" -- inside distribute form submit --");
+
+	  // check for blank date ranges in either field
+	  if (dist_range_start.val() == "" || dist_range_end.val() == "") { 
+              console.log("-- invalid assign range detected --");
+
+	      // if error not already shown, show it
+	      if (dist_error.hasClass('d-none')) {
+	          dist_error.toggleClass('d-none');
+	      }
+
+	      // stop page from refreshing
+	      return false;
+	  }
+
+	  // set up moment vars for comparison
+	  var start_date = moment(dist_range_start.val(),'YYYY-MM-DD');
+	  var end_date = moment(dist_range_end.val(),'YYYY-MM-DD');
+
+	  console.log("-- checking for invalid datetime underlap --");
+	  // if start time is NOT before end time
+	  if (!start_date.isBefore(end_date)) {
+              console.log("-- ranges are not correctly sequenced --");
+	      // if error not already shown, show it
+	      if (dist_error.hasClass('d-none')) {
+		  dist_error.toggleClass('d-none');
+	      }
+
+              // stop page from refreshing
+	      return false;
+	  
+	  } else {
+              // start the distribution process
+	      started = true;
+	      // hide assign button
+	      $("#btn_assign").toggleClass('d-none');
+	      // hide header
+	      $(".modal-header").toggleClass('d-none');
+	      // show progress text
+	      $("#assign-text").toggleClass('d-none');
+	      // hide inner-modal-body
+	      mod_body.toggleClass('d-none');
+
+	      $.ajax({
+	          type: frm.attr('method'),
+		  url:  frm.attr('action'),
+		  data: frm.serialize(),
+		  success: function (data) {
+			  if (data.task_id != null) {
+		              // insert progress bar if success
+			      console.log("success in leads_assign form -> submit");
+			      // show progress bar div
+			      $(".progress").toggleClass('d-none');
+                              
+			      // call ajax for updating bar
+			      get_assign_info(data.task_id);
+			  }
+		  },
+		  error: function (data) {
+	              // need to add some kind of feedback for error reporting
+		      console.log("error in leads_assign form -> submit");
+                  }
+	      });
+           return false;
+          } // end data validation if
+       });
+  });
+
+  function get_export_info(task_id) {
+      console.log("-- inside get_import_info");
+      $.ajax({
+         type: 'get',
+         url: '/leads/export/',
+         data: {'task_id': task_id},
+         success: function (data) {
+	     if (data.state == 'PENDING') {
+                 console.log(" -- success: PENDING ..");
+             }
+             else if (data.state == 'PROGRESS' || data.state == 'SUCCESS') {
+                 export_progress_bar.css('width', data.result.export_progress);
+		     
+		 if (data.result.import_status == '-- Lead exporting complete --'){
+                    // close modal
+                    $('#exportleadscsv').modal('toggle');
+		    location.reload(true);
+                 }
+	     }
+             
+            if (data.state != 'SUCCESS') {
+                 console.log(" -- continuing with async task on Celery ..");
+                 setTimeout(function () {
+                     get_import_info(task_id);
+                  }, 250);
+             }
+         },
+         error: function (data) {
+             // need to add some kind of feedback for error reporting
+             console.log(" -- error: something happened on SpiderJob Import ..");
+             console.log(data)
+         }
+     });
+
+  }
+
+	
+
+  function get_import_info(task_id) {
+    console.log("-- inside get_import_info");
+
+    $.ajax({
+         type: 'get',
+         url: '/spiderfarm/import/',
+         data: {'task_id': task_id},
+         success: function (data) {
+             if (data.state == 'PENDING') {
+                 console.log(" -- success: PENDING ..");
+             }
+             else if (data.state == 'PROGRESS' || data.state == 'SUCCESS') {
+                 //console.log('-- job still in progress or successful');
+                 console.log("-- data.result.import_status --");
+                 console.log(data.result.import_status);
+                 console.log("-- data.current_domain_progress --");
+                 console.log(data.result.current_domain_progress);
+                 //console.log("-- data.result.current_domain --");
+                 //console.log(data.result.current_domain);
+		 console.log("-- data.total_domains --");
+                 console.log(data.result.total_domains);
+
+		 console.log("-- data.spiderjob_label --");
+                 console.log(data.result.spiderjob_label);
+
+		 console.log("-- data.spiderjob_progress --");
+                 console.log(data.result.spiderjob_progress);
+
+		 console.log("-- data.spiderjob_total --");
+                 console.log(data.result.spiderjob_total);
+
+		 console.log("-- data.current_spiderjob --");
+                 console.log(data.result.current_spiderjob);
+
+		 console.log("-- data.total_spiderjobs --");
+                 console.log(data.result.total_spiderjobs);
+
+                 prgimport_bar.css('width', data.result.current_domain_progress);
+                 prgtrack_bar.css('width', data.result.spiderjob_progress);
+                 import_text = data.result.current_domain + " of " + data.result.total_domains + " domains"
+
+                 track_text = "Running " + data.result.current_spiderjob + " of " + data.result.total_spiderjobs + " SpiderJobs";
+
+		 console.log("-- track_text --");
+                 console.log(track_text);
+
+                 $('#lbl-import-progress label').text(import_text);
+                 $('#lbl-jobs-progress label').text(track_text);
+
+		 if (data.result.import_status == '-- Domain importing complete --'){
+	            // refresh page
+		    location.reload(true);
+	         }
+
+             }
+             if (data.state != 'SUCCESS') {
+                 console.log(" -- continuing with async task on Celery ..");
+                 setTimeout(function () {
+                     get_import_info(task_id);
+                  }, 250);
+             }
+         },
+         error: function (data) {
+             // need to add some kind of feedback for error reporting
+             console.log(" -- error: something happened on SpiderJob Import ..");
+	     console.log(data)
+         }
+     });
+
+  }
+
+
+
+  $(function () {
+    import_frm.submit(function() {
+        console.log("caught import_frm.submit() button");
+
+        $.ajax({
+              type: import_frm.attr('method'),
+              url:  import_frm.attr('action'),
+              data: import_frm.serialize(),
+              success: function (data) {
+
+		   console.log('-- inside import_frm ajax success --');
+		   console.log(data)
+
+                   if (data.task_id != null) {
+                       console.log(" -- success: starting Import Spider Jobs ..");
+                       console.log('task id: ' + data.task_id); 
+			import_started = true;
+                        
+			// hide import form
+			$('#frm_import_domains').toggleClass('d-none');
+
+			// hide zone stats
+			$('#zone_stats').toggleClass('d-none');
+
+			// unhide bottom progress bar
+			$('#zone_import_ui_bottom').toggleClass('d-none');
+
+			// unhide top ui
+			$('#zone_import_ui_top').toggleClass('d-none');
+
+                        get_import_info(data.task_id);
+                   }
+
+              },
+              error: function (data) {
+		   import_started = false;
+                   console.log("error in import_domains");
+		   console.log(data)
+              }
+            });
+     return false;
+
+    }); // end import_frm.submit()
+  });
+
+  function get_pending_zones_onload(tld_type){
+    console.log("inside get_pending_zones_onload");
+    console.log(tld_type);
+    var no_dot_tld = tld_type.replace('.','');
+    console.log(no_dot_tld);
+    jobs_url = "http://35.155.172.235:8000/spiderfarm/pending-zones?tld_type=";
+    api_url = jobs_url.concat(no_dot_tld);
+
+    $.ajax({
+        type: "GET",
+        url: api_url,
+        success: function (data) {
+            console.log('success for get_pending_zones_onload');
+            console.log(data.frag_count);
+            update_import_range_button(data.frag_count);
+            update_import_range_slider(data.frag_count, data.frag_count);
+            },
+        error: function (data) {
+               // need to add some kind of feedback for error reporting
+               console.log("error in get_pending_zones_onload");
+	       console.log(data)
+              }
+
+        });
+    return false;
+  }
+
+  function close_leads_assign() {
+
+      if (started == true) {
+          // reset the display elements
+          $("#btn_assign").toggleClass('d-none');
+	  $(".modal-header").toggleClass('d-none');
+          $("#assign-text").toggleClass('d-none');
+          // hide progress bar, unhide mod_body
+	  $('.progress').toggleClass('d-none');
+	  mod_body.toggleClass('d-none');
+		              
+          // then reset the flag var
+	  started = false;
+      }
+	      
+      // if error is shown, remove it
+      if (!dist_error.hasClass('d-none')) {
+	  dist_error.toggleClass('d-none');
+      }
+
+      // clear datetime fields
+      dist_range_start.val("");
+      dist_range_end.val("");
+  }
+
+
+  $(document).ready(function () {
+    $(".tag_class_opp").click(function () {
+      // $(".tag_class_opp").css('cursor', 'pointer')
+      url = "{% url 'opportunity:list' %}"
+      url = url + "?tag=" + $(this).attr('data-link')
+      window.location.href = url;
+    });
+
+    $(".tag_class_acc").click(function () {
+      // $(".tag_class_acc").css('cursor', 'pointer')
+      url = "{% url 'accounts:list' %}"
+      url = url + "?tag=" + $(this).attr('data-link')
+      window.location.href = url;
+    });
+  });
+
+
+    function get_assign_info(task_id) {
+	         console.log(" -- inside get_assign_info ..");
+
+	         $.ajax({
+	            type: 'get',
+	            url: '/leads/assign/',
+		    data: {'task_id': task_id},
+	            success: function (data) {
+			if (data.state == 'PENDING') {
+			   console.log(" -- success: PENDING ..");
+			}
+			else if (data.state == 'PROGRESS' || data.state == 'SUCCESS') {
+			   console.log('-- job still in progress or successful')
+			   console.log("-- data.result.precent --");
+			   console.log(data.result.percent);
+			   console.log("-- data.result.current --");
+			   console.log(data.result.current);
+
+			   prgline.css('width', data.result.percent);
+			}
+
+			if (data.state != 'SUCCESS') {
+			   console.log(" -- continuing with async task on Celery ..");
+				setTimeout(function () {
+				   get_assign_info(task_id);										}, 250);							                                }
+		 },
+                 error: function (data) {
+		     // need to add some kind of feedback for error reporting
+		     console.log(" -- error: something happened ..");
+		 }
+	         });
+    }
+
+    $(function () {
+      var date = new Date();
+      var today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      $('#id_assign_range_start').datetimepicker({
+          'format': 'YYYY-MM-DD',
+      })
+    });
+
+    $(function () {
+       var date = new Date();
+       var today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+       $('#id_assign_range_end').datetimepicker({
+           'format': 'YYYY-MM-DD',
+       })
+    });
+
+   $(function () {
+      var date = new Date();
+      var today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      $('#id_ssl_expire_start').datetimepicker({
+            'format': 'YYYY-MM-DD',
+      })
+   });
+
+   $(function () {
+      var date = new Date();
+      var today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      $('#id_ssl_expire_end').datetimepicker({
+            'format': 'YYYY-MM-DD',
+      })
+   });
+
+</script>
+{% endblock js_block %}
