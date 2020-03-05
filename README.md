@@ -2,7 +2,7 @@
 Originally designed for a cold-call tech support scam operation, SpiderFarm CRM is a lead management tool geared towards social engineering. 
 
 ### Disclaimer
-I wrote this to meet contractual requirements for a [shady company](sslguru.com) that I was not happy about doing work for (long story, see below). This software enables one to mass scan websites and catalog data (with a nice UI) pertaining to SSL certificates, Whois data and installed CMS software (specifically WordPress) of said scanned sites. This is probably not okay to run at mass scale in most jurisdictions, and is provided for educational purposes only and also to CYA (my A, to be exact) as a whistleblower by disclosing this software to the public as being used by a telephonic fraud entity. 
+I wrote this to meet contractual requirements for a [shady company](https://www.sslguru.com) that I was not happy about doing work for (long story, see below). This software enables one to mass scan websites and catalog data (with a nice UI) pertaining to SSL certificates, Whois data and installed CMS software (specifically WordPress) of said scanned sites. This is probably not okay to run at mass scale in most jurisdictions, and is provided for educational purposes only and also to CYA (my A, to be exact) as a whistleblower by disclosing this software to the public as being used by a telephonic fraud entity. 
 ¯\_(ツ)_/¯
 
 ### Features
